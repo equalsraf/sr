@@ -1,0 +1,9 @@
+[package]
+name = "sr"
+version = "0.1.0"
+authors = ["raf"]
+
+[dependencies]
+pty = '0.1.6'
+pty-shell = '0.1.4'
+libc = '0.2'
