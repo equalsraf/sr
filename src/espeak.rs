@@ -42,10 +42,36 @@ enum espeak_POSITION_TYPE {
 	POS_SENTENCE
 }
 
+#[repr(C)]
+pub enum espeak_PARAMETER {
+	SILENCE = 0,
+	RATE,
+	VOLUME,
+	PITCH,
+	RANGE,
+	PUNCTUATION,
+	CAPITALS,
+	WORDGAP,
+	OPTIONS,
+	INTONATION,
+	RESERVED1,
+	RESERVED2,
+	EMPHASIS,
+	VOICETYPE,
+	N_SPEECH_PARAM
+}
+
+#[repr(C)]
+pub enum Ponctuation {
+	None = 0,
+	All = 1,
+	Some = 2,
+}
+
 #[link(name = "espeak")]
 extern "C" {
-    pub fn espeak_Initialize(output: espeak_AUDIO_OUTPUT, buflength: c_int, path: *const c_char, options: c_int) -> c_int;
-	pub fn espeak_Synth(text: *const c_void,
+    fn espeak_Initialize(output: espeak_AUDIO_OUTPUT, buflength: c_int, path: *const c_char, options: c_int) -> c_int;
+	fn espeak_Synth(text: *const c_void,
 		size: size_t,
 		position: c_uint,
 		position_type: espeak_POSITION_TYPE,
@@ -53,7 +79,10 @@ extern "C" {
 		flags: c_uint,
 		unique_identifier: *mut c_uint,
 user_data: *mut c_void) -> espeak_ERROR;
-	pub fn espeak_Synchronize() -> espeak_ERROR;
+	fn espeak_Key(key_name: *const c_char) -> espeak_ERROR;
+	fn espeak_Synchronize() -> espeak_ERROR;
+	fn espeak_SetParameter(parameter: espeak_PARAMETER, value: c_int, relative: c_int) -> espeak_ERROR;
+	fn espeak_Cancel() -> espeak_ERROR;
 }
 
 pub struct ESpeak {
@@ -62,6 +91,18 @@ pub struct ESpeak {
 
 impl ESpeak {
     pub fn sample_rate(&self) -> i32 { self.sample_rate }
+
+    pub fn set_ponctuation(&mut self, p: Ponctuation) -> Result<(), Error>{
+        unsafe {
+        match espeak_SetParameter(espeak_PARAMETER::PUNCTUATION,
+                                p as i32,
+                                0) {
+
+            espeak_ERROR::EE_OK => Ok(()),
+            err => Err(Error::from(err)),
+        }
+        }
+    }
 
     pub fn new() -> Result<Self, ()> {
         let rate = unsafe {
@@ -97,8 +138,23 @@ impl ESpeak {
         }
     }
 
+    pub fn say_key(&self, key_name: &[u8]) -> Result<(), Error> {
+        let c_str = CString::new(key_name).unwrap();
+        match unsafe { espeak_Key(c_str.as_ptr()) } {
+            espeak_ERROR::EE_OK => Ok(()),
+            err => Err(Error::from(err)),
+        }
+    }
+
     pub fn synchronize(&self) -> Result<(), Error> {
         match unsafe { espeak_Synchronize() } {
+            espeak_ERROR::EE_OK => Ok(()),
+            err => Err(Error::from(err)),
+        }
+    }
+
+    pub fn cancel(&self) -> Result<(), Error> {
+        match unsafe { espeak_Cancel() } {
             espeak_ERROR::EE_OK => Ok(()),
             err => Err(Error::from(err)),
         }

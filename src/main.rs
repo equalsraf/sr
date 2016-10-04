@@ -1,6 +1,7 @@
 
 use std::env;
 use std::str;
+use std::sync::mpsc::{channel, Sender};
 
 extern crate libc;
 extern crate pty;
@@ -13,7 +14,9 @@ use espeak::ESpeak;
 
 struct ScreenReader {
     speak: ESpeak,
+    signal_shutdown: Sender<()>,
 }
+
 impl PtyHandler for ScreenReader {
     fn input(&mut self, input: &[u8]) {
         let _ = self.speak.say(input);
@@ -30,22 +33,29 @@ impl PtyHandler for ScreenReader {
 
     fn shutdown(&mut self) {
         let _ = self.speak.say("sr SHELL shutdown".as_bytes());
+        let _ = self.signal_shutdown.send(());
     }
 }
 
 fn main() {
-    let speak = ESpeak::new().expect("Unable to initialize espeak");
+    let mut speak = ESpeak::new().expect("Unable to initialize espeak");
     let shell = env::var("SHELL").expect("Cannot determine SHELL");
 
     speak.say("sr starting".as_bytes()).unwrap();
+    speak.set_ponctuation(espeak::Ponctuation::All).unwrap();
 
-    let sr = ScreenReader {
+    let (tx, rx) = channel();
+    let mut sr = ScreenReader {
         speak: speak,
+        signal_shutdown: tx,
     };
 
     let child = pty::fork().unwrap();
-    child.exec("dmesg").unwrap();
+    child.exec(shell).unwrap();
     child.proxy(sr).unwrap();
+
+    rx.recv().unwrap();
+
     child.wait().unwrap();
 }
 
